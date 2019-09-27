@@ -88,12 +88,14 @@ def evaluate(model: nn.Module,
     :param logger: Logger.
     :return: A list with the score for each task based on `metric_func`.
     """
+
+    # Get only the predictions (first entry)
     preds = predict(
         model=model,
         data=data,
         batch_size=batch_size,
         scaler=scaler
-    )
+    )[0]
 
     targets = data.targets()
 

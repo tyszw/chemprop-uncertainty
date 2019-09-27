@@ -6,10 +6,11 @@ from .mpn import MPN
 from chemprop.nn_utils import get_activation_function, initialize_weights
 
 
+
 class MoleculeModel(nn.Module):
     """A MoleculeModel is a model which contains a message passing network following by feed-forward layers."""
 
-    def __init__(self, classification: bool, multiclass: bool):
+    def __init__(self, classification: bool, multiclass: bool, aleatoric: bool):
         """
         Initializes the MoleculeModel.
 
@@ -24,6 +25,8 @@ class MoleculeModel(nn.Module):
         if self.multiclass:
             self.multiclass_softmax = nn.Softmax(dim=2)
         assert not (self.classification and self.multiclass)
+
+        self.aleatoric = aleatoric
 
     def create_encoder(self, args: Namespace):
         """
@@ -58,6 +61,7 @@ class MoleculeModel(nn.Module):
                 dropout,
                 nn.Linear(first_linear_dim, args.output_size)
             ]
+            last_linear_dim = first_linear_dim
         else:
             ffn = [
                 dropout,
@@ -74,9 +78,16 @@ class MoleculeModel(nn.Module):
                 dropout,
                 nn.Linear(args.ffn_hidden_size, args.output_size),
             ])
+            last_linear_dim = args.ffn_hidden_size
 
         # Create FFN model
-        self.ffn = nn.Sequential(*ffn)
+        self._ffn = nn.Sequential(*ffn)
+
+        if self.aleatoric:
+            self.output_layer = nn.Linear(last_linear_dim, args.output_size)
+            self.logvar_layer = nn.Linear(last_linear_dim, args.output_size)
+        else:
+            self.output_layer = nn.Linear(last_linear_dim, args.output_size)
 
     def forward(self, *input):
         """
@@ -85,7 +96,16 @@ class MoleculeModel(nn.Module):
         :param input: Input.
         :return: The output of the MoleculeModel.
         """
-        output = self.ffn(self.encoder(*input))
+        _output = self._ffn(self.encoder(*input))
+
+        if self.aleatoric:
+            output = self.output_layer(_output)
+            logvar = self.logvar_layer(_output)
+
+            # Gaussian uncertainty only for regression, directly returning in this case
+            return output, logvar
+        else:
+            output = self.output_layer(_output)
 
         # Don't apply sigmoid during training b/c using BCEWithLogitsLoss
         if self.classification and not self.training:
@@ -96,7 +116,6 @@ class MoleculeModel(nn.Module):
                 output = self.multiclass_softmax(output) # to get probabilities during evaluation, but not during training as we're using CrossEntropyLoss
 
         return output
-
 
 def build_model(args: Namespace) -> nn.Module:
     """
@@ -110,7 +129,7 @@ def build_model(args: Namespace) -> nn.Module:
     if args.dataset_type == 'multiclass':
         args.output_size *= args.multiclass_num_classes
 
-    model = MoleculeModel(classification=args.dataset_type == 'classification', multiclass=args.dataset_type == 'multiclass')
+    model = MoleculeModel(classification=args.dataset_type == 'classification', multiclass=args.dataset_type == 'multiclass', aleatoric=args.aleatoric)
     model.create_encoder(args)
     model.create_ffn(args)
 

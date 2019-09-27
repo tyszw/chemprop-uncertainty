@@ -221,13 +221,14 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
         # Evaluate on test set using model with best validation score
         info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
         model = load_checkpoint(os.path.join(save_dir, 'model.pt'), cuda=args.cuda, logger=logger)
-        
+
+        # Get only the predictions (first entry)
         test_preds = predict(
             model=model,
             data=test_data,
             batch_size=args.batch_size,
             scaler=scaler
-        )
+        )[0]
         test_scores = evaluate_predictions(
             preds=test_preds,
             targets=test_targets,
