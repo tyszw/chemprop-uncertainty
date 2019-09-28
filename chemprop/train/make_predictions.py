@@ -73,13 +73,14 @@ def make_predictions(args: Namespace, smiles: List[str] = None) -> List[Optional
             model=model,
             data=test_data,
             batch_size=args.batch_size,
-            scaler=scaler
+            scaler=scaler,
+            sampling_size=args.sampling_size
         )
         sum_preds += np.array(model_preds)
         if ale_uncs is not None:
             sum_ale_uncs += np.array(ale_uncs)
         if epi_uncs is not None:
-            sum_epi_uncs += np.array(ale_uncs)
+            sum_epi_uncs += np.array(epi_uncs)
 
     # Ensemble predictions
     avg_preds = sum_preds / len(args.checkpoint_paths)

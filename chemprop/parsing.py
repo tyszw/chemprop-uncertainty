@@ -43,6 +43,8 @@ def add_predict_args(parser: ArgumentParser):
                         help='Turn off scaling of features')
     parser.add_argument('--max_data_size', type=int,
                         help='Maximum number of data points to load')
+    parser.add_argument('--sampling_size', type=int, default=20,
+                        help='Sampling size for MC-Dropout')
 
 
 def add_train_args(parser: ArgumentParser):
@@ -177,7 +179,13 @@ def add_train_args(parser: ArgumentParser):
                         help='Use messages on atoms instead of messages on bonds')
     parser.add_argument('--aleatoric', action='store_true', default=False,
                         help='Compute aleatoric uncertainty')
-
+    parser.add_argument('--epistemic', type=str, default=None,
+                        choices=['mc_dropout'],
+                        help='Compute epistemic uncertainty with a specified method')
+    parser.add_argument('--regularization_scale', type=float, default=1e-4,
+                        help='Concrete dropout regularization scale')
+    parser.add_argument('--sampling_size', type=int, default=20,
+                        help='Sampling size for MC-Dropout')
 
 def update_checkpoint_args(args: Namespace):
     """

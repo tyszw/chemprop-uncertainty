@@ -3,14 +3,15 @@ from argparse import Namespace
 import torch.nn as nn
 
 from .mpn import MPN
-from chemprop.nn_utils import get_activation_function, initialize_weights
+from chemprop.nn_utils import get_activation_function, initialize_weights, get_cc_dropout_hyper
+from chemprop.models.concrete_dropout import ConcreteDropout, RegularizationAccumulator
 
 
 
 class MoleculeModel(nn.Module):
     """A MoleculeModel is a model which contains a message passing network following by feed-forward layers."""
 
-    def __init__(self, classification: bool, multiclass: bool, aleatoric: bool):
+    def __init__(self, classification: bool, multiclass: bool, aleatoric: bool, epistemic: str):
         """
         Initializes the MoleculeModel.
 
@@ -27,6 +28,8 @@ class MoleculeModel(nn.Module):
         assert not (self.classification and self.multiclass)
 
         self.aleatoric = aleatoric
+        self.epistemic = epistemic
+        self.mc_dropout = self.epistemic == 'mc_dropout'
 
     def create_encoder(self, args: Namespace):
         """
@@ -55,28 +58,36 @@ class MoleculeModel(nn.Module):
         dropout = nn.Dropout(args.dropout)
         activation = get_activation_function(args.activation)
 
+        wd, dd = get_cc_dropout_hyper(args.train_data_size, args.regularization_scale)
+
         # Create FFN layers
         if args.ffn_num_layers == 1:
             ffn = [
                 dropout,
-                nn.Linear(first_linear_dim, args.output_size)
             ]
             last_linear_dim = first_linear_dim
         else:
             ffn = [
                 dropout,
+                ConcreteDropout(layer=nn.Linear(first_linear_dim, args.ffn_hidden_size),
+                                reg_acc=args.reg_acc, weight_regularizer=wd,
+                                dropout_regularizer=dd) if self.mc_dropout else
                 nn.Linear(first_linear_dim, args.ffn_hidden_size)
+
             ]
             for _ in range(args.ffn_num_layers - 2):
                 ffn.extend([
                     activation,
                     dropout,
-                    nn.Linear(args.ffn_hidden_size, args.ffn_hidden_size),
+                    ConcreteDropout(layer=nn.Linear(args.ffn_hidden_size, args.ffn_hidden_size),
+                                    reg_acc=args.reg_acc, weight_regularizer=wd,
+                                    dropout_regularizer=dd) if self.mc_dropout else
+                    nn.Linear(args.ffn_hidden_size, args.ffn_hidden_size)
                 ])
             ffn.extend([
                 activation,
                 dropout,
-                nn.Linear(args.ffn_hidden_size, args.output_size),
+
             ])
             last_linear_dim = args.ffn_hidden_size
 
@@ -129,10 +140,16 @@ def build_model(args: Namespace) -> nn.Module:
     if args.dataset_type == 'multiclass':
         args.output_size *= args.multiclass_num_classes
 
-    model = MoleculeModel(classification=args.dataset_type == 'classification', multiclass=args.dataset_type == 'multiclass', aleatoric=args.aleatoric)
+    if args.epistemic == 'mc_dropout':
+            args.reg_acc = RegularizationAccumulator()
+
+    model = MoleculeModel(classification=args.dataset_type == 'classification', multiclass=args.dataset_type == 'multiclass', aleatoric=args.aleatoric, epistemic=args.epistemic)
     model.create_encoder(args)
     model.create_ffn(args)
 
     initialize_weights(model)
+
+    if args.epistemic == 'mc_dropout':
+        args.reg_acc.initialize(cuda=args.cuda)
 
     return model

@@ -8,6 +8,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from tqdm import trange
 
+
 from chemprop.data import MoleculeDataset
 
 
@@ -85,6 +86,20 @@ def initialize_weights(model: nn.Module):
             nn.init.constant_(param, 0)
         else:
             nn.init.xavier_normal_(param)
+
+
+def get_cc_dropout_hyper(num_train: int, regularization_scale: int):
+    """
+    Compute the hyperparameters for Concrete Dropout
+
+    :param num_train: Training size.
+    :param regularization_scale: Regularization scale.
+    :return: A tuple: (weight_regularizer, dropout_regularizer)
+
+    """
+    wd = regularization_scale ** 2 / num_train
+    dd = 2. / num_train
+    return wd, dd
 
 
 class Identity(nn.Module):

@@ -73,6 +73,7 @@ def evaluate(model: nn.Module,
              metric_func: Callable,
              batch_size: int,
              dataset_type: str,
+             sampling_size: int,
              scaler: StandardScaler = None,
              logger: logging.Logger = None) -> List[float]:
     """
@@ -94,7 +95,8 @@ def evaluate(model: nn.Module,
         model=model,
         data=data,
         batch_size=batch_size,
-        scaler=scaler
+        scaler=scaler,
+        sampling_size=sampling_size
     )[0]
 
     targets = data.targets()

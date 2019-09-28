@@ -80,8 +80,12 @@ def train(model: nn.Module,
         else:
             means, logvars = model(batch, features_batch)
             loss = loss_func(targets, means, logvars) * class_weights * mask
-        
+
         loss = loss.sum() / mask.sum()
+
+        if args.epistemic == 'mc_dropout':
+            reg_loss = args.reg_acc.get_sum()
+            loss += reg_loss
 
         loss_sum += loss.item()
         iter_count += len(mol_batch)
