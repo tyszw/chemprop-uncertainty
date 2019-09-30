@@ -65,8 +65,11 @@ def make_predictions(args: Namespace, smiles: List[str] = None) -> List[Optional
         sum_ale_uncs = np.zeros((len(test_data), args.num_tasks))
         sum_epi_uncs = np.zeros((len(test_data), args.num_tasks))
 
+    # Partial results for variance robust calculation.
+    all_preds = np.zeros((len(test_data), args.num_tasks, len(args.checkpoint_paths)))
+
     print(f'Predicting with an ensemble of {len(args.checkpoint_paths)} models')
-    for checkpoint_path in tqdm(args.checkpoint_paths, total=len(args.checkpoint_paths)):
+    for index, checkpoint_path in enumerate(tqdm(args.checkpoint_paths, total=len(args.checkpoint_paths))):
         # Load model
         model = load_checkpoint(checkpoint_path, cuda=args.cuda)
         model_preds, ale_uncs, epi_uncs = predict(
@@ -81,17 +84,34 @@ def make_predictions(args: Namespace, smiles: List[str] = None) -> List[Optional
             sum_ale_uncs += np.array(ale_uncs)
         if epi_uncs is not None:
             sum_epi_uncs += np.array(epi_uncs)
+        if args.estimate_variance:
+            all_preds[:, :, index] = model_preds
 
     # Ensemble predictions
-    avg_preds = sum_preds / len(args.checkpoint_paths)
-    avg_preds = avg_preds.tolist()
 
-    avg_ale_uncs = sum_ale_uncs / len(args.checkpoint_paths)
-    avg_ale_uncs = avg_ale_uncs.tolist()
+    if args.estimate_variance:
+        # Use ensemble variance to estimate uncertainty. This overwrites existing uncertainty estimates.
+        # preds <- mean(preds), ale_uncs <- mean(ale_uncs), epi_uncs <- var(preds)
+        avg_preds = sum_preds / len(args.checkpoint_paths)
+        avg_preds = avg_preds.tolist()
 
-    avg_epi_uncs = sum_epi_uncs / len(args.checkpoint_paths)
-    avg_epi_uncs = avg_epi_uncs.tolist()
+        avg_ale_uncs = sum_ale_uncs / len(args.checkpoint_paths)
+        avg_ale_uncs = avg_ale_uncs.tolist()
 
+        avg_epi_uncs = np.var(all_preds, axis=2)
+        avg_epi_uncs = avg_epi_uncs.tolist()
+
+    else:
+        # Use another method to estimate uncertainty.
+        # preds <- mean(preds), ale_uncs <- mean(ale_uncs), epi_uncs <- mean(epi_uncs)
+        avg_preds = sum_preds / len(args.checkpoint_paths)
+        avg_preds = avg_preds.tolist()
+
+        avg_ale_uncs = sum_ale_uncs / len(args.checkpoint_paths)
+        avg_ale_uncs = avg_ale_uncs.tolist()
+
+        avg_epi_uncs = sum_epi_uncs / len(args.checkpoint_paths)
+        avg_epi_uncs = avg_epi_uncs.tolist()
 
     # Save predictions
     assert len(test_data) == len(avg_preds)

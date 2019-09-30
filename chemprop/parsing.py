@@ -45,6 +45,8 @@ def add_predict_args(parser: ArgumentParser):
                         help='Maximum number of data points to load')
     parser.add_argument('--sampling_size', type=int, default=20,
                         help='Sampling size for MC-Dropout')
+    parser.add_argument('--estimate_variance', action='store_true', default=False,
+                        help='Compute ensemble variance as uncertainty estimation')
 
 
 def add_train_args(parser: ArgumentParser):
