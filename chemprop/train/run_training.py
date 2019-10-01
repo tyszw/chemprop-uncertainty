@@ -11,11 +11,12 @@ import torch
 from tqdm import trange
 import pickle
 from torch.optim.lr_scheduler import ExponentialLR
+import random
 
 from .evaluate import evaluate, evaluate_predictions
 from .predict import predict
 from .train import train
-from chemprop.data import StandardScaler
+from chemprop.data import StandardScaler, MoleculeDataset
 from chemprop.data.utils import get_class_sizes, get_data, get_task_names, split_data
 from chemprop.models import build_model
 from chemprop.nn_utils import param_count
@@ -148,6 +149,16 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
             writer = SummaryWriter(log_dir=save_dir)
         except:
             writer = SummaryWriter(logdir=save_dir)
+        # Bootstrap training dataset
+        if args.bootstrap:
+            model_seed = args.seed + model_idx
+            train_data = MoleculeDataset(random.Random(model_seed).choices(train_data.data, k=len(train_data)))
+            if args.save_smiles_splits:
+                with open(os.path.join(save_dir, 'bootstrap_smiles.csv'), 'w') as f:
+                    writer_bootstrap = csv.writer(f)
+                    writer_bootstrap.writerow(['smiles'])
+                    for smiles in train_data.smiles():
+                        writer_bootstrap.writerow([smiles])
         # Load/build model
         if args.checkpoint_paths is not None:
             debug(f'Loading model {model_idx} from {args.checkpoint_paths[model_idx]}')
