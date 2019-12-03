@@ -140,6 +140,9 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
     else:
         sum_test_preds = np.zeros((len(test_smiles), args.num_tasks))
 
+    if args.bootstrap:
+        all_train_data = train_data
+
     # Train ensemble of models
     for model_idx in range(args.ensemble_size):
         # Tensorboard writer
@@ -152,7 +155,7 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
         # Bootstrap training dataset
         if args.bootstrap:
             model_seed = args.seed + model_idx
-            train_data = MoleculeDataset(random.Random(model_seed).choices(train_data.data, k=len(train_data)))
+            train_data = MoleculeDataset(random.Random(model_seed).choices(all_train_data.data, k=len(all_train_data)))
             if args.save_smiles_splits:
                 with open(os.path.join(save_dir, 'bootstrap_smiles.csv'), 'w') as f:
                     writer_bootstrap = csv.writer(f)
