@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 from tqdm import trange
 
 from chemprop.data import MoleculeDataset
-from chemprop.nn_utils import compute_gnorm, compute_pnorm, NoamLR
+from chemprop.nn_utils import compute_gnorm, compute_pnorm, NoamLR, CosineAnnealingWarmRestarts
 
 
 def train(model: nn.Module,
@@ -19,6 +19,7 @@ def train(model: nn.Module,
           optimizer: Optimizer,
           scheduler: _LRScheduler,
           args: Namespace,
+          epoch: int = 1,
           n_iter: int = 0,
           logger: logging.Logger = None,
           writer: SummaryWriter = None) -> int:
@@ -31,6 +32,7 @@ def train(model: nn.Module,
     :param optimizer: An Optimizer.
     :param scheduler: A learning rate scheduler.
     :param args: Arguments.
+    :param epoch: Epoch.
     :param n_iter: The number of iterations (training examples) trained on so far.
     :param logger: A logger for printing intermediate results.
     :param writer: A tensorboardX SummaryWriter.
@@ -95,6 +97,8 @@ def train(model: nn.Module,
 
         if isinstance(scheduler, NoamLR):
             scheduler.step()
+        if isinstance(scheduler, CosineAnnealingWarmRestarts):
+            scheduler.step(epoch + i/num_iters)
 
         n_iter += len(mol_batch)
 

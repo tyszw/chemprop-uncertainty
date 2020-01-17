@@ -177,7 +177,10 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
             model = model.cuda()
 
         # Ensure that model is saved in correct location for evaluation if 0 epochs
-        save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
+        if args.scheduler != 'sgdr':
+            save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
+        else:
+            save_checkpoint(os.path.join(save_dir, 'model0.pt'), model, scaler, features_scaler, args)
 
         # Optimizers
         optimizer = build_optimizer(model, args)
@@ -198,6 +201,7 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
                 optimizer=optimizer,
                 scheduler=scheduler,
                 args=args,
+                epoch=epoch,
                 n_iter=n_iter,
                 logger=logger,
                 writer=writer
@@ -231,20 +235,45 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
             if args.minimize_score and avg_val_score < best_score or \
                     not args.minimize_score and avg_val_score > best_score:
                 best_score, best_epoch = avg_val_score, epoch
-                save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)        
+                if args.scheduler != 'sgdr':
+                    save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
+            if args.scheduler == 'sgdr' and (epoch+1) % args.snapshot_ensembles == 0:
+                n_snapshot_ensemble = int(((epoch+1) / args.snapshot_ensembles) - 1)
+                save_checkpoint(os.path.join(save_dir, f'model{n_snapshot_ensemble}.pt'), model, scaler, features_scaler, args)
 
         # Evaluate on test set using model with best validation score
         info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
-        model = load_checkpoint(os.path.join(save_dir, 'model.pt'), cuda=args.cuda, logger=logger)
 
-        # Get only the predictions (first entry)
-        test_preds = predict(
-            model=model,
-            data=test_data,
-            batch_size=args.batch_size,
-            scaler=scaler,
-            sampling_size=args.sampling_size
-        )[0]
+        # A single training leads to one model
+        if args.scheduler != 'sgdr':
+            model = load_checkpoint(os.path.join(save_dir, 'model.pt'), cuda=args.cuda, logger=logger)
+            # Get only the predictions (first entry)
+            test_preds = predict(
+                model=model,
+                data=test_data,
+                batch_size=args.batch_size,
+                scaler=scaler,
+                sampling_size=args.sampling_size
+            )[0]
+
+        # A single training leads to an ensemble of models
+        else:
+            sum_preds = np.zeros((len(test_data), args.num_tasks))
+
+            print(f'Predicting with an ensemble of {args.snapshot_ensemble_size} models')
+            for index in range(args.snapshot_ensemble_size):
+                model = load_checkpoint(os.path.join(save_dir, f'model{index}.pt'), cuda=args.cuda, logger=logger)
+                model_preds = predict(
+                    model=model,
+                    data=test_data,
+                    batch_size=args.batch_size,
+                    scaler=scaler,
+                    sampling_size=args.sampling_size
+                )[0]
+                sum_preds += np.array(model_preds)
+            test_preds = sum_preds/args.snapshot_ensemble_size
+
+
         test_scores = evaluate_predictions(
             preds=test_preds,
             targets=test_targets,

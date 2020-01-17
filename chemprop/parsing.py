@@ -73,7 +73,7 @@ def add_train_args(parser: ArgumentParser):
                         choices=get_available_features_generators(),
                         help='Method of generating additional features')
     parser.add_argument('--features_path', type=str, nargs='*',
-                        help='Path to features to use in FNN (instead of features_generator)')                   
+                        help='Path to features to use in FNN (instead of features_generator)')
     parser.add_argument('--save_dir', type=str, default=None,
                         help='Directory where model checkpoints will be saved')
     parser.add_argument('--save_smiles_splits', action='store_true', default=False,
@@ -110,9 +110,9 @@ def add_train_args(parser: ArgumentParser):
                         help='Which fold to use as val for leave-one-out cross val')
     parser.add_argument('--test_fold_index', type=int, default=None,
                         help='Which fold to use as test for leave-one-out cross val')
-    parser.add_argument('--crossval_index_dir', type=str, 
+    parser.add_argument('--crossval_index_dir', type=str,
                         help='Directory in which to find cross validation index files')
-    parser.add_argument('--crossval_index_file', type=str, 
+    parser.add_argument('--crossval_index_file', type=str,
                         help='Indices of files to use as train/val/test'
                              'Overrides --num_folds and --seed.')
     parser.add_argument('--seed', type=int, default=0,
@@ -146,6 +146,11 @@ def add_train_args(parser: ArgumentParser):
                         help='Number of epochs to run')
     parser.add_argument('--batch_size', type=int, default=50,
                         help='Batch size')
+    parser.add_argument('--scheduler', type=str, default='noam',
+                        choices=['noam', 'sgdr'],
+                        help='Scheduler type')
+    parser.add_argument('--snapshot_ensemble_size', type=int, default=5,
+                        help='Snapshot ensemble size')
     parser.add_argument('--warmup_epochs', type=float, default=2.0,
                         help='Number of epochs during which learning rate increases linearly from'
                              'init_lr to max_lr. Afterwards, learning rate decreases exponentially'
@@ -174,7 +179,7 @@ def add_train_args(parser: ArgumentParser):
                         choices=['ReLU', 'LeakyReLU', 'PReLU', 'tanh', 'SELU', 'ELU'],
                         help='Activation function')
     parser.add_argument('--undirected', action='store_true', default=False,
-                        help='Undirected edges (always sum the two relevant bond vectors)')                     
+                        help='Undirected edges (always sum the two relevant bond vectors)')
     parser.add_argument('--ffn_hidden_size', type=int, default=None,
                         help='Hidden dim for higher-capacity FFN (defaults to hidden_size)')
     parser.add_argument('--ffn_num_layers', type=int, default=2,
@@ -294,7 +299,7 @@ def modify_train_args(args: Namespace):
     args.minimize_score = args.metric in ['rmse', 'mae', 'mse', 'cross_entropy']
 
     update_checkpoint_args(args)
-    
+
     if args.features_only:
         assert args.features_generator or args.features_path
 
@@ -319,6 +324,9 @@ def modify_train_args(args: Namespace):
 
     if args.test:
         args.epochs = 0
+
+    # compute step for snapshot ensembles
+    args.snapshot_ensembles = int(args.epochs/args.snapshot_ensemble_size)
 
 
 def parse_train_args() -> Namespace:

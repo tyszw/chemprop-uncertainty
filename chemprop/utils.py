@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 from chemprop.data import StandardScaler
 from chemprop.models import build_model, MoleculeModel
-from chemprop.nn_utils import NoamLR
+from chemprop.nn_utils import NoamLR, CosineAnnealingWarmRestarts
 
 
 def makedirs(path: str, isfile: bool = False):
@@ -296,15 +296,23 @@ def build_lr_scheduler(optimizer: Optimizer, args: Namespace, total_epochs: List
     :return: An initialized learning rate scheduler.
     """
     # Learning rate scheduler
-    return NoamLR(
-        optimizer=optimizer,
-        warmup_epochs=[args.warmup_epochs],
-        total_epochs=total_epochs or [args.epochs] * args.num_lrs,
-        steps_per_epoch=args.train_data_size // args.batch_size,
-        init_lr=[args.init_lr],
-        max_lr=[args.max_lr],
-        final_lr=[args.final_lr]
-    )
+
+    if args.scheduler == 'noam':
+        return NoamLR(
+            optimizer=optimizer,
+            warmup_epochs=[args.warmup_epochs],
+            total_epochs=total_epochs or [args.epochs] * args.num_lrs,
+            steps_per_epoch=args.train_data_size // args.batch_size,
+            init_lr=[args.init_lr],
+            max_lr=[args.max_lr],
+            final_lr=[args.final_lr]
+        )
+    elif args.scheduler == 'sgdr':
+        return CosineAnnealingWarmRestarts(
+            optimizer=optimizer,
+            T_0=args.snapshot_ensembles,
+            eta_min=args.final_lr
+        )
 
 
 def create_logger(name: str, save_dir: str = None, quiet: bool = False) -> logging.Logger:
