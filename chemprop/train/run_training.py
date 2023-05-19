@@ -143,6 +143,9 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
     if args.bootstrap:
         all_train_data = train_data
 
+    # Save test preds
+    dict_test_preds = {}
+
     # Train ensemble of models
     for model_idx in range(args.ensemble_size):
         # Tensorboard writer
@@ -237,14 +240,20 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
         info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
         model = load_checkpoint(os.path.join(save_dir, 'model.pt'), cuda=args.cuda, logger=logger)
 
-        # Get only the predictions (first entry)
-        test_preds = predict(
+        # Get only the predictions (first entry) <- changed
+        test_preds, test_ale, _ = predict(
             model=model,
             data=test_data,
             batch_size=args.batch_size,
             scaler=scaler,
             sampling_size=args.sampling_size
-        )[0]
+        )
+
+        # Save test_preds
+        dict_test_preds[f'model_{model_idx}'] = {}
+        dict_test_preds[f'model_{model_idx}']['test_preds'] = test_preds
+        dict_test_preds[f'model_{model_idx}']['test_ale'] =  test_ale
+
         test_scores = evaluate_predictions(
             preds=test_preds,
             targets=test_targets,
@@ -290,4 +299,4 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
         for task_name, ensemble_score in zip(args.task_names, ensemble_scores):
             info(f'Ensemble test {task_name} {args.metric} = {ensemble_score:.6f}')
 
-    return ensemble_scores
+    return ensemble_scores, dict_test_preds

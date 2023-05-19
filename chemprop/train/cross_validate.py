@@ -1,6 +1,7 @@
 from argparse import Namespace
 from logging import Logger
 import os
+import pickle
 from typing import Tuple
 
 import numpy as np
@@ -21,13 +22,20 @@ def cross_validate(args: Namespace, logger: Logger = None) -> Tuple[float, float
 
     # Run training on different random seeds for each fold
     all_scores = []
+    all_test_preds = {}
     for fold_num in range(args.num_folds):
         info(f'Fold {fold_num}')
         args.seed = init_seed + fold_num
         args.save_dir = os.path.join(save_dir, f'fold_{fold_num}')
         makedirs(args.save_dir)
-        model_scores = run_training(args, logger)
+        model_scores, test_preds = run_training(args, logger)
         all_scores.append(model_scores)
+        all_test_preds[f'fold_{fold_num}'] = test_preds
+
+    with open(os.path.join(save_dir, 'test_preds.pkl'), 'wb') as f:
+        pickle.dump(all_test_preds, f)
+    print('Saved test predictions: ', os.path.join(args.save_dir, 'test_preds.pkl'))
+
     all_scores = np.array(all_scores)
 
     # Report results
